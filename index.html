@@ -22,7 +22,7 @@
   #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .6s ease;}
   #loading-screen.hide{opacity:0;pointer-events:none;}
   #loading-screen.gone{display:none;}
-  .loading-logo{font-family:'Bebas Neue';font-size:56px;letter-spacing:8px;color:var(--white);animation:logoIn .6s ease both;}
+  .loading-logo{font-family:'Bebas Neue';font-size:clamp(32px,10vw,56px);letter-spacing:clamp(3px,2vw,8px);color:var(--white);animation:logoIn .6s ease both;white-space:nowrap;text-align:center;}
   .loading-logo span{color:var(--orange);}
   .loading-bar{width:260px;height:3px;background:var(--gray-dark);border-radius:2px;overflow:hidden;}
   .loading-bar-fill{height:100%;background:var(--orange);border-radius:2px;animation:loadbar 1.2s ease-in-out infinite;}
