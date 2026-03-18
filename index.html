@@ -290,7 +290,7 @@
 <!-- FIREBASE SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ===== FIREBASE CONFIG =====
 const firebaseConfig = {
@@ -304,23 +304,30 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const DOC_REF = doc(db, "app", "data");
+const DOC_REF = doc(db, "app", "data");       // dados principais (sem fotos)
+const PHOTOS_COL = collection(db, "photos");  // fotos em documentos separados
 
 // ===== STATE =====
 let state = { players: [], championships: [] };
+let photos = {};   // { [playerId]: base64string }
 let saveTimeout = null;
 
 function setSyncing(status) {
-  // status: 'syncing' | 'ok' | 'error'
   const dot = document.getElementById('sync-dot');
   dot.className = 'sync-dot' + (status === 'syncing' ? ' syncing' : status === 'error' ? ' error' : '');
   dot.title = status === 'syncing' ? 'Sincronizando...' : status === 'error' ? 'Erro de conexão' : 'Sincronizado ✓';
 }
 
+// Salva dados principais (sem fotos) — rápido
 async function saveToFirebase() {
   setSyncing('syncing');
   try {
-    await setDoc(DOC_REF, { state: JSON.stringify(state) });
+    // Remove fotos do state antes de salvar (ficam em coleção separada)
+    const stateToSave = {
+      ...state,
+      players: state.players.map(p => { const {photo, ...rest} = p; return rest; })
+    };
+    await setDoc(DOC_REF, { state: JSON.stringify(stateToSave) });
     setSyncing('ok');
   } catch(e) {
     console.error(e);
@@ -329,8 +336,25 @@ async function saveToFirebase() {
   }
 }
 
+// Salva foto de um jogador em documento separado (~200KB por foto, sem limite prático)
+async function savePhotoToFirebase(playerId, base64) {
+  setSyncing('syncing');
+  try {
+    if(base64) {
+      await setDoc(doc(db, "photos", String(playerId)), { photo: base64 });
+    } else {
+      await deleteDoc(doc(db, "photos", String(playerId)));
+    }
+    photos[playerId] = base64;
+    setSyncing('ok');
+  } catch(e) {
+    console.error(e);
+    setSyncing('error');
+    toast('Erro ao salvar foto! Verifique sua conexão.');
+  }
+}
+
 function save() {
-  // Debounce — evita múltiplas gravações rápidas
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(saveToFirebase, 500);
 }
@@ -339,11 +363,18 @@ function save() {
 async function initFirebase() {
   document.getElementById('loading-txt').textContent = 'Carregando dados...';
   try {
-    // Listener em tempo real — qualquer mudança no Firestore atualiza o app
+    // Carrega fotos primeiro (uma vez)
+    document.getElementById('loading-txt').textContent = 'Carregando fotos...';
+    const photoSnap = await getDocs(PHOTOS_COL);
+    photoSnap.forEach(d => { photos[d.id] = d.data().photo; });
+
+    // Listener em tempo real para dados principais
     onSnapshot(DOC_REF, (snap) => {
       if (snap.exists()) {
         const remote = JSON.parse(snap.data().state || '{}');
         state = { players: remote.players || [], championships: remote.championships || [] };
+        // Aplica fotos do cache local nos jogadores
+        state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
       } else {
         state = { players: [], championships: [] };
       }
@@ -354,13 +385,13 @@ async function initFirebase() {
       setSyncing('error');
     });
 
-    // Esconde loading após primeiro load
     setTimeout(() => {
       document.getElementById('loading-screen').classList.add('hide');
       renderHome();
     }, 800);
 
   } catch(e) {
+    console.error(e);
     document.getElementById('loading-txt').textContent = 'Erro ao conectar. Recarregue a página.';
     setSyncing('error');
   }
@@ -437,8 +468,12 @@ window.addPlayer = addPlayer;
 
 function removePlayer(id) {
   const p = state.players.find(x=>x.id===id);
-  showConfirm('👤','REMOVER JOGADOR?',`Tem certeza que deseja remover "${p?.name}"? Esta ação não pode ser desfeita.`, () => {
+  showConfirm('👤','REMOVER JOGADOR?',`Tem certeza que deseja remover "${p?.name}"? Esta ação não pode ser desfeita.`, async () => {
     state.players = state.players.filter(p=>p.id!==id);
+    if(photos[String(id)]) {
+      await deleteDoc(doc(db, "photos", String(id)));
+      delete photos[String(id)];
+    }
     save(); toast('Jogador removido!'); renderPlayers();
   });
 }
@@ -514,7 +549,7 @@ function handlePhotoUpload(e) {
 }
 window.handlePhotoUpload = handlePhotoUpload;
 
-function saveEditPlayer() {
+async function saveEditPlayer() {
   const name = document.getElementById('edit-player-name').value.trim();
   const nick = document.getElementById('edit-player-nick').value.trim();
   if(!name) { toast('Digite o nome'); return; }
@@ -522,11 +557,22 @@ function saveEditPlayer() {
   if(!p) return;
   const duplicate = state.players.find(x=>x.id!==editingPlayerId && x.name.toLowerCase()===name.toLowerCase());
   if(duplicate) { toast('Já existe um jogador com esse nome!'); return; }
+
+  // Salva foto separadamente se mudou
+  const photoChanged = editPhotoBase64 !== (photos[String(p.id)] || null);
   p.name = name;
   p.nick = nick;
   p.photo = editPhotoBase64;
-  save(); toast('Jogador atualizado! ✅');
+
+  // Fecha modal antes de salvar para boa UX
   closeEditModal();
+  toast('Salvando...');
+
+  if(photoChanged) {
+    await savePhotoToFirebase(p.id, editPhotoBase64);
+  }
+  save();
+  toast('Jogador atualizado! ✅');
   renderPlayers();
 }
 window.saveEditPlayer = saveEditPlayer;
