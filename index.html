@@ -19,14 +19,16 @@
   body{background:var(--black);color:var(--white);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden;}
 
   /* LOADING SCREEN */
-  #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
-  #loading-screen.hide{display:none;}
-  .loading-logo{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;color:var(--white);}
+  #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .6s ease;}
+  #loading-screen.hide{opacity:0;pointer-events:none;}
+  #loading-screen.gone{display:none;}
+  .loading-logo{font-family:'Bebas Neue';font-size:56px;letter-spacing:8px;color:var(--white);animation:logoIn .6s ease both;}
   .loading-logo span{color:var(--orange);}
-  .loading-bar{width:200px;height:3px;background:var(--gray-dark);border-radius:2px;overflow:hidden;}
-  .loading-bar-fill{height:100%;background:var(--orange);border-radius:2px;animation:loadbar 1.5s ease-in-out infinite;}
+  .loading-bar{width:260px;height:3px;background:var(--gray-dark);border-radius:2px;overflow:hidden;}
+  .loading-bar-fill{height:100%;background:var(--orange);border-radius:2px;animation:loadbar 1.2s ease-in-out infinite;}
+  .loading-txt{font-size:12px;color:var(--gray-mid);letter-spacing:3px;text-transform:uppercase;animation:logoIn .8s ease both;}
   @keyframes loadbar{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
-  .loading-txt{font-size:13px;color:var(--gray-light);letter-spacing:2px;text-transform:uppercase;}
+  @keyframes logoIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
   /* HEADER */
   #app-header{background:linear-gradient(135deg,var(--black2),var(--black3));border-bottom:2px solid var(--orange);padding:0 20px;display:flex;align-items:center;gap:14px;height:64px;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(255,107,0,0.2);}
@@ -206,11 +208,10 @@
 <body>
 
 <!-- LOADING -->
-<div id="loading-screen" style="display:none">
+<div id="loading-screen">
   <div class="loading-logo">FIFA <span>BLESSING</span> CUP</div>
   <div class="loading-bar"><div class="loading-bar-fill"></div></div>
-  <div class="loading-txt" id="loading-txt">Conectando ao Firebase...</div>
-  <button onclick="showApp()" style="margin-top:20px;background:var(--orange);color:#000;border:none;padding:10px 24px;font-family:'Rajdhani';font-weight:700;font-size:15px;border-radius:8px;cursor:pointer;display:none" id="btn-entrar">ENTRAR MESMO ASSIM</button>
+  <div class="loading-txt">Carregando...</div>
 </div>
 
 <div id="app-header">
@@ -465,10 +466,14 @@ function save() {
 
 // ===== LOAD & REALTIME SYNC =====
 let appReady = false;
+let splashDone = false;
 
 function showApp() {
   const ls = document.getElementById('loading-screen');
-  if(ls) ls.style.display = 'none';
+  if(ls) {
+    ls.classList.add('hide');
+    setTimeout(() => ls.classList.add('gone'), 650);
+  }
   if(!appReady) {
     appReady = true;
     try { renderHome(); } catch(e) { console.error('renderHome error:', e); }
@@ -476,6 +481,9 @@ function showApp() {
     try { refreshCurrentPage(); } catch(e) { console.error('refresh error:', e); }
   }
 }
+
+// Splash de 3 segundos — só abre depois desse tempo
+setTimeout(showApp, 3000);
 
 async function initFirebase() {
   try {
@@ -502,20 +510,16 @@ async function initFirebase() {
         state = { players: [], championships: [], teams: [] };
       }
       setSyncing('ok');
-      showApp();        // abre ou re-renderiza
+      if(appReady) refreshCurrentPage();
+      // Se dados chegaram antes dos 3s, ficam prontos pra quando o splash terminar
     }, (err) => {
       console.error(err);
       setSyncing('error');
-      showApp();
     });
-
-    // Fallback: abre após 4s mesmo sem Firebase
-    setTimeout(showApp, 4000);
 
   } catch(e) {
     console.error(e);
     setSyncing('error');
-    showApp();
   }
 }
 
