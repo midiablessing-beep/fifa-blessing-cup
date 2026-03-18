@@ -736,18 +736,30 @@ async function saveEditPlayer() {
   const duplicate = state.players.find(x=>x.id!==editingPlayerId && x.name.toLowerCase()===name.toLowerCase());
   if(duplicate) { toast('Já existe um jogador com esse nome!'); return; }
 
-  // Salva foto separadamente se mudou
-  const photoChanged = editPhotoBase64 !== (photos[String(p.id)] || null);
+  // Captura tudo ANTES de fechar o modal (closeEditModal zera editPhotoBase64!)
+  const photoToSave = editPhotoBase64;
+  const photoChanged = photoToSave !== (photos[String(p.id)] || null);
+
   p.name = name;
   p.nick = nick;
-  p.photo = editPhotoBase64;
+  p.photo = photoToSave;
 
-  // Fecha modal antes de salvar para boa UX
+  // Atualiza cache local imediatamente
+  if(photoToSave) {
+    photos[String(p.id)] = photoToSave;
+    try { localStorage.setItem('photo_' + String(p.id), photoToSave); } catch(e){}
+  } else if(photoChanged) {
+    delete photos[String(p.id)];
+    try { localStorage.removeItem('photo_' + String(p.id)); } catch(e){}
+  }
+
+  // Fecha modal
   closeEditModal();
   toast('Salvando...');
 
+  // Salva foto no Firestore se mudou (usa photoToSave, nao editPhotoBase64 que ja foi zerado)
   if(photoChanged) {
-    await savePhotoToFirebase(p.id, editPhotoBase64);
+    await savePhotoToFirebase(p.id, photoToSave);
   }
   save();
   toast('Jogador atualizado! ✅');
