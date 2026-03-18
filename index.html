@@ -19,8 +19,8 @@
   body{background:var(--black);color:var(--white);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden;}
 
   /* LOADING SCREEN */
-  #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s;}
-  #loading-screen.hide{opacity:0;pointer-events:none;display:none;}
+  #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+  #loading-screen.hide{display:none;}
   .loading-logo{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;color:var(--white);}
   .loading-logo span{color:var(--orange);}
   .loading-bar{width:200px;height:3px;background:var(--gray-dark);border-radius:2px;overflow:hidden;}
@@ -206,7 +206,7 @@
 <body>
 
 <!-- LOADING -->
-<div id="loading-screen">
+<div id="loading-screen" style="display:none">
   <div class="loading-logo">FIFA <span>BLESSING</span> CUP</div>
   <div class="loading-bar"><div class="loading-bar-fill"></div></div>
   <div class="loading-txt" id="loading-txt">Conectando ao Firebase...</div>
@@ -470,21 +470,13 @@ function showApp() {
   if(appReady) return;
   appReady = true;
   const ls = document.getElementById('loading-screen');
-  if(ls) { ls.classList.add('hide'); ls.style.display = 'none'; }
+  if(ls) { ls.style.display = 'none'; }
   try { renderHome(); } catch(e) { console.error('renderHome error:', e); }
 }
 
 async function initFirebase() {
-  document.getElementById('loading-txt').textContent = 'Conectando ao Firebase...';
-
-  // Fallbacks de segurança
-  setTimeout(showApp, 2000);
-  setTimeout(showApp, 5000);
-  // Mostrar botão de emergência após 3s
-  setTimeout(() => {
-    const btn = document.getElementById('btn-entrar');
-    if(btn && !appReady) btn.style.display = 'inline-block';
-  }, 3000);
+  // Abre o app imediatamente — Firebase conecta em background
+  setTimeout(showApp, 100);
 
   try {
     let photosLoaded = false;
