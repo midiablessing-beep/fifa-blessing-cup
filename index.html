@@ -246,7 +246,8 @@
     <div class="section-title">PAINEL PRINCIPAL</div>
     <div id="home-podium"></div>
     <div class="grid-3" id="home-stats"></div>
-    <div class="grid-2" style="margin-top:20px">
+    <div id="home-best-match" style="margin-top:20px"></div>
+    <div class="grid-2" style="margin-top:12px">
       <div>
         <div style="font-family:'Bebas Neue';font-size:18px;letter-spacing:2px;color:var(--orange);margin-bottom:12px;">ÚLTIMOS RESULTADOS</div>
         <div id="home-recent"></div>
@@ -1260,6 +1261,54 @@ function renderHome() {
       if(hp&&ap) allDone.push({...m,champName:c.name,hp,ap});
     });
   });
+
+  // Maior goleada geral (critério: mais gols no jogo inteiro, desempate pela diferença)
+  const bestEl=document.getElementById('home-best-match');
+  if(bestEl) {
+    let best=null;
+    allDone.forEach(m=>{
+      const total=m.homeGoals+m.awayGoals;
+      const diff=Math.abs(m.homeGoals-m.awayGoals);
+      if(!best||total>best.total||(total===best.total&&diff>best.diff)){
+        best={m,total,diff};
+      }
+    });
+    if(best) {
+      const m=best.m;
+      const winnerGoals=Math.max(m.homeGoals,m.awayGoals);
+      const loserGoals=Math.min(m.homeGoals,m.awayGoals);
+      const winner=m.homeGoals>=m.awayGoals?m.hp:m.ap;
+      const loser=m.homeGoals>=m.awayGoals?m.ap:m.hp;
+      const isDraw=m.homeGoals===m.awayGoals;
+      const scoreColor=isDraw?'var(--yellow)':'var(--green)';
+      bestEl.innerHTML=`
+        <div style="font-family:'Bebas Neue';font-size:18px;letter-spacing:2px;color:var(--orange);margin-bottom:10px;">&#128293; MAIOR GOLEADA GERAL</div>
+        <div style="background:var(--gray-dark);border:1px solid var(--gray-mid);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:80px">
+            ${playerAvatar(winner,36,14)}
+            <div>
+              <div style="font-family:'Bebas Neue';font-size:16px">${winner.nick||winner.name}</div>
+              ${isDraw?'':'<div style="font-size:10px;color:var(--green);letter-spacing:1px">VENCEDOR</div>'}
+            </div>
+          </div>
+          <div style="text-align:center;flex:0 0 auto">
+            <div style="font-family:'Orbitron';font-size:26px;font-weight:700;color:${scoreColor};letter-spacing:2px">${isDraw?m.homeGoals+' &times; '+m.awayGoals:winnerGoals+' &times; '+loserGoals}</div>
+            <div style="font-size:10px;color:var(--gray-light);margin-top:3px">${m.champName}</div>
+            <div style="font-size:10px;color:var(--orange);margin-top:2px">${best.total} gols no jogo</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:80px;justify-content:flex-end">
+            <div style="text-align:right">
+              <div style="font-family:'Bebas Neue';font-size:16px">${isDraw?loser.nick||loser.name:loser.nick||loser.name}</div>
+              ${isDraw?'':'<div style="font-size:10px;color:var(--red);letter-spacing:1px">DERROTADO</div>'}
+            </div>
+            ${playerAvatar(loser,36,14)}
+          </div>
+        </div>`;
+    } else {
+      bestEl.innerHTML='';
+    }
+  }
+
   const recent=allDone.slice(-5).reverse();
   const recentEl=document.getElementById('home-recent');
   if(recentEl) recentEl.innerHTML=recent.length?recent.map(m=>`
