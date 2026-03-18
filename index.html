@@ -20,7 +20,7 @@
 
   /* LOADING SCREEN */
   #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s;}
-  #loading-screen.hide{opacity:0;pointer-events:none;}
+  #loading-screen.hide{opacity:0;pointer-events:none;display:none;}
   .loading-logo{font-family:'Bebas Neue';font-size:48px;letter-spacing:6px;color:var(--white);}
   .loading-logo span{color:var(--orange);}
   .loading-bar{width:200px;height:3px;background:var(--gray-dark);border-radius:2px;overflow:hidden;}
@@ -467,6 +467,16 @@ let appReady = false;
 
 async function initFirebase() {
   document.getElementById('loading-txt').textContent = 'Conectando ao Firebase...';
+
+  function showApp() {
+    if(appReady) return;
+    appReady = true;
+    const ls = document.getElementById('loading-screen');
+    ls.classList.add('hide');
+    ls.style.display = 'none';
+    renderHome();
+  }
+
   try {
     let photosLoaded = false;
 
@@ -497,35 +507,24 @@ async function initFirebase() {
       }
       setSyncing('ok');
       if(!appReady) {
-        appReady = true;
-        document.getElementById('loading-screen').classList.add('hide');
-        renderHome();
+        showApp();
       } else {
         refreshCurrentPage();
       }
     }, (err) => {
       console.error(err);
       setSyncing('error');
-      if(!appReady) {
-        appReady = true;
-        document.getElementById('loading-screen').classList.add('hide');
-        renderHome();
-      }
+      if(!appReady) showApp();
     });
 
-    // Fallback: mostra o app após 5s caso o Firebase não responda
-    setTimeout(() => {
-      if(!appReady) {
-        appReady = true;
-        document.getElementById('loading-screen').classList.add('hide');
-        renderHome();
-      }
-    }, 5000);
+    // Fallback: mostra o app após 3s caso o Firebase não responda
+    setTimeout(showApp, 3000);
 
   } catch(e) {
     console.error(e);
     document.getElementById('loading-txt').textContent = 'Erro ao conectar. Recarregue a página.';
     setSyncing('error');
+    setTimeout(showApp, 2000);
   }
 }
 
