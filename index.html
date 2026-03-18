@@ -783,6 +783,7 @@ function renderChampsList() {
   else sel.innerHTML = state.players.map(p=>`
     <span class="player-pill" id="pill-${p.id}" onclick="togglePill(${p.id})">
       ${(photos[String(p.id)]||p.photo) ? `<img src="${photos[String(p.id)]||p.photo}" style="width:24px;height:24px;border-radius:50%;object-fit:cover">` : `<span class="pav">${initials(p.name)}</span>`}${p.nick||p.name}
+    </span>`).join('');
 
   const el = document.getElementById('champ-list-items');
   if(!state.championships.length){ el.innerHTML='<div class="empty-state"><div class="empty-icon">🏆</div><p>Nenhum campeonato criado</p></div>'; return; }
