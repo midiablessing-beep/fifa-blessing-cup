@@ -171,7 +171,32 @@
   ::-webkit-scrollbar-track{background:var(--black2)}
   ::-webkit-scrollbar-thumb{background:var(--orange-dim);border-radius:3px}
 
-  @media(max-width:700px){
+  /* DRAW (SORTEIO) */
+  .team-badge{display:inline-flex;align-items:center;gap:8px;background:var(--black4);border:1px solid var(--gray-dark);border-radius:8px;padding:8px 14px;margin:4px;font-weight:700;font-size:15px;}
+  .team-badge .team-color{width:16px;height:16px;border-radius:4px;flex-shrink:0;}
+  .team-badge .team-del{background:none;border:none;cursor:pointer;color:var(--gray-mid);font-size:14px;padding:0 0 0 6px;transition:color .2s;}
+  .team-badge .team-del:hover{color:var(--red);}
+
+  .draw-result{background:var(--black4);border-radius:12px;overflow:hidden;margin-top:20px;}
+  .draw-result-header{background:var(--orange);padding:12px 20px;font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;color:var(--black);}
+  .draw-pair{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.05);}
+  .draw-pair:last-child{border-bottom:none;}
+  .draw-pair-num{font-family:'Bebas Neue';font-size:28px;color:var(--orange-dim);width:32px;text-align:center;flex-shrink:0;}
+  .draw-team-block{flex:1;display:flex;align-items:center;gap:10px;}
+  .draw-team-color{width:20px;height:20px;border-radius:4px;flex-shrink:0;}
+  .draw-team-name{font-family:'Bebas Neue';font-size:18px;letter-spacing:1px;}
+  .draw-player-name{font-size:14px;color:var(--gray-light);}
+  .draw-vs{font-family:'Bebas Neue';font-size:20px;color:var(--gray-mid);}
+
+  .color-picker-wrap{display:flex;align-items:center;gap:10px;}
+  .color-swatch{width:36px;height:36px;border-radius:6px;border:2px solid var(--gray-dark);cursor:pointer;transition:border-color .2s;flex-shrink:0;}
+  .color-swatch:hover{border-color:var(--orange);}
+  input[type=color]{width:0;height:0;opacity:0;position:absolute;}
+
+  @keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  .draw-result.animating .draw-pair{animation:bounce .4s ease;}
+
+
     .grid-2,.grid-3{grid-template-columns:1fr;}
     .match-card{flex-wrap:wrap;}
     .logo-text{font-size:20px;}
@@ -207,6 +232,7 @@
   <div class="drawer-divider"></div>
   <button class="nav-item" id="nav-general" onclick="goPage('general')"><span class="nav-emoji">📊</span> Ranking Geral</button>
   <button class="nav-item" id="nav-stats" onclick="goPage('stats')"><span class="nav-emoji">📈</span> Estatísticas</button>
+  <button class="nav-item" id="nav-draw" onclick="goPage('draw')"><span class="nav-emoji">🎲</span> Sorteio de Times</button>
   <div class="drawer-sync">
     <div class="sync-dot syncing" id="sync-dot" title="Sincronizando..."></div>
     <span id="sync-label">Sincronizando...</span>
@@ -268,6 +294,53 @@
     <div class="section-title">ESTATÍSTICAS</div>
     <div id="stats-player-select" style="margin-bottom:20px"></div>
     <div id="stats-content"></div>
+  </div>
+
+  <div class="page" id="page-draw">
+    <div class="section-title">SORTEIO DE TIMES</div>
+    <div class="grid-2">
+
+      <!-- CADASTRAR TIMES -->
+      <div>
+        <div class="card">
+          <div class="card-title">CADASTRAR TIMES</div>
+          <div class="form-group">
+            <label class="form-label">Nome do Time</label>
+            <input class="form-input" id="inp-team-name" placeholder="Ex: Real Madrid, Flamengo..." maxlength="30">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cor do Time</label>
+            <div class="color-picker-wrap">
+              <div class="color-swatch" id="color-swatch-preview" style="background:#FF6B00" onclick="document.getElementById('inp-team-color').click()"></div>
+              <input type="color" id="inp-team-color" value="#FF6B00" oninput="document.getElementById('color-swatch-preview').style.background=this.value">
+              <span style="font-size:13px;color:var(--gray-light)">Clique no quadrado para escolher</span>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="addTeam()">+ Adicionar Time</button>
+        </div>
+
+        <div class="card" style="margin-top:0">
+          <div class="card-title">TIMES CADASTRADOS</div>
+          <div id="team-list"></div>
+        </div>
+      </div>
+
+      <!-- SORTEAR -->
+      <div>
+        <div class="card">
+          <div class="card-title">SELECIONAR JOGADORES</div>
+          <p style="font-size:13px;color:var(--gray-light);margin-bottom:12px">Selecione os jogadores que vão participar do sorteio. Serão sorteados em pares (2 jogadores por time).</p>
+          <div id="draw-player-select"></div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-dark)">
+            <div id="draw-info" style="font-size:13px;color:var(--gray-light);margin-bottom:12px"></div>
+            <button class="btn btn-primary" id="btn-sortear" onclick="realizarSorteio()" style="width:100%">🎲 REALIZAR SORTEIO</button>
+          </div>
+        </div>
+
+        <div id="draw-result-wrap"></div>
+      </div>
+
+    </div>
   </div>
 </main>
 
@@ -354,7 +427,8 @@ async function saveToFirebase() {
     // Remove fotos do state antes de salvar (ficam em coleção separada)
     const stateToSave = {
       ...state,
-      players: state.players.map(p => { const {photo, ...rest} = p; return rest; })
+      players: state.players.map(p => { const {photo, ...rest} = p; return rest; }),
+      teams: state.teams || []
     };
     await setDoc(DOC_REF, { state: JSON.stringify(stateToSave) });
     setSyncing('ok');
@@ -416,7 +490,7 @@ async function initFirebase() {
     onSnapshot(DOC_REF, (snap) => {
       if (snap.exists()) {
         const remote = JSON.parse(snap.data().state || '{}');
-        state = { players: remote.players || [], championships: remote.championships || [] };
+        state = { players: remote.players || [], championships: remote.championships || [], teams: remote.teams || [] };
         // Aplica fotos do cache em tempo real
         state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
       } else {
@@ -451,6 +525,7 @@ function refreshCurrentPage() {
   else if(active === 'page-champs') renderChampsPage();
   else if(active === 'page-general') renderGeneral();
   else if(active === 'page-stats') renderStats();
+  else if(active === 'page-draw') renderDraw();
 }
 
 // ===== CONFIRM MODAL =====
@@ -508,6 +583,7 @@ function goPage(p) {
   if(p==='champs') renderChampsPage();
   if(p==='general') renderGeneral();
   if(p==='stats') renderStats();
+  if(p==='draw') renderDraw();
 }
 window.goPage = goPage;
 window.toggleNav = toggleNav;
@@ -1056,6 +1132,161 @@ function renderHome() {
       </div>
       <span style="color:var(--orange);font-size:18px">›</span>
     </div>`).join(''):'<div class="empty-state" style="padding:24px"><p>Nenhum campeonato ativo</p></div>';
+}
+
+// ===== SORTEIO DE TIMES =====
+// Times ficam no state.teams (array)
+// Garante que state.teams existe
+function ensureTeams() { if(!state.teams) state.teams = []; }
+
+const PRESET_COLORS = ['#FF6B00','#E74C3C','#2ECC71','#3498DB','#9B59B6','#F1C40F','#1ABC9C','#E91E63','#FF9800','#00BCD4'];
+
+function addTeam() {
+  ensureTeams();
+  const name = document.getElementById('inp-team-name').value.trim();
+  const color = document.getElementById('inp-team-color').value;
+  if(!name) { toast('Digite o nome do time'); return; }
+  if(state.teams.find(t=>t.name.toLowerCase()===name.toLowerCase())) { toast('Time já existe!'); return; }
+  state.teams.push({ id: Date.now(), name, color });
+  save(); toast('Time adicionado! ✅');
+  document.getElementById('inp-team-name').value = '';
+  // Sugere próxima cor do preset
+  const nextColor = PRESET_COLORS[state.teams.length % PRESET_COLORS.length];
+  document.getElementById('inp-team-color').value = nextColor;
+  document.getElementById('color-swatch-preview').style.background = nextColor;
+  renderDraw();
+}
+window.addTeam = addTeam;
+
+function removeTeam(id) {
+  ensureTeams();
+  const t = state.teams.find(x=>x.id===id);
+  showConfirm('🏟️','REMOVER TIME?',`Tem certeza que deseja remover "${t?.name}"?`, ()=>{
+    state.teams = state.teams.filter(x=>x.id!==id);
+    save(); toast('Time removido!'); renderDraw();
+  });
+}
+window.removeTeam = removeTeam;
+
+let selectedDrawPlayers = [];
+
+function toggleDrawPlayer(id) {
+  if(selectedDrawPlayers.includes(id)) {
+    selectedDrawPlayers = selectedDrawPlayers.filter(x=>x!==id);
+  } else {
+    selectedDrawPlayers.push(id);
+  }
+  updateDrawInfo();
+  // Update pill visuals
+  document.querySelectorAll('[id^="dpill-"]').forEach(el=>{
+    const pid = parseInt(el.id.replace('dpill-',''));
+    el.classList.toggle('selected', selectedDrawPlayers.includes(pid));
+  });
+}
+window.toggleDrawPlayer = toggleDrawPlayer;
+
+function updateDrawInfo() {
+  ensureTeams();
+  const el = document.getElementById('draw-info');
+  if(!el) return;
+  const np = selectedDrawPlayers.length;
+  const nt = state.teams.length;
+  if(np === 0) { el.textContent = 'Nenhum jogador selecionado.'; return; }
+  if(nt === 0) { el.textContent = 'Cadastre ao menos um time.'; return; }
+  // Pares: cada time recebe 2 jogadores
+  const pairs = Math.min(Math.floor(np/2), nt);
+  const usedPlayers = pairs * 2;
+  el.innerHTML = `<span style="color:var(--orange)">${np}</span> jogador(es) selecionado(s) · <span style="color:var(--orange)">${nt}</span> time(s) · será(ão) formado(s) <span style="color:var(--green)">${pairs}</span> dupla(s)${usedPlayers < np ? ` · <span style="color:var(--yellow)">${np-usedPlayers} jogador(es) ficará(ão) de fora</span>`:''}.`;
+}
+
+function realizarSorteio() {
+  ensureTeams();
+  if(selectedDrawPlayers.length < 2) { toast('Selecione pelo menos 2 jogadores'); return; }
+  if(state.teams.length === 0) { toast('Cadastre pelo menos 1 time'); return; }
+
+  // Embaralha jogadores
+  const players = [...selectedDrawPlayers].sort(()=>Math.random()-0.5);
+  const teams = [...state.teams].sort(()=>Math.random()-0.5);
+
+  const pairs = Math.min(Math.floor(players.length/2), teams.length);
+  const results = [];
+  for(let i=0;i<pairs;i++){
+    const p1 = state.players.find(x=>x.id===players[i*2]);
+    const p2 = state.players.find(x=>x.id===players[i*2+1]);
+    results.push({ team: teams[i], p1, p2 });
+  }
+
+  const wrap = document.getElementById('draw-result-wrap');
+  if(!wrap) return;
+
+  wrap.innerHTML = `
+    <div class="draw-result animating" id="draw-result-box">
+      <div class="draw-result-header">🎲 RESULTADO DO SORTEIO</div>
+      ${results.map((r,i)=>`
+        <div class="draw-pair">
+          <div class="draw-pair-num">${i+1}</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div class="draw-team-color" style="background:${r.team.color}"></div>
+              <div class="draw-team-name">${r.team.name}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="display:flex;align-items:center;gap:6px">${r.p1?playerAvatar(r.p1,24,10):''}<span class="draw-player-name">${r.p1?.nick||r.p1?.name||'?'}</span></span>
+              <span class="draw-vs">+</span>
+              <span style="display:flex;align-items:center;gap:6px">${r.p2?playerAvatar(r.p2,24,10):''}<span class="draw-player-name">${r.p2?.nick||r.p2?.name||'?'}</span></span>
+            </div>
+          </div>
+        </div>`).join('')}
+      <div style="padding:14px 20px;text-align:center">
+        <button class="btn btn-secondary btn-sm" onclick="realizarSorteio()">🔀 Sortear Novamente</button>
+      </div>
+    </div>`;
+
+  // Remove animação após terminar
+  setTimeout(()=>{
+    const box = document.getElementById('draw-result-box');
+    if(box) box.classList.remove('animating');
+  }, 500);
+
+  toast('Sorteio realizado! 🎲');
+}
+window.realizarSorteio = realizarSorteio;
+
+function renderDraw() {
+  ensureTeams();
+
+  // Team list
+  const tl = document.getElementById('team-list');
+  if(tl) {
+    if(!state.teams.length) {
+      tl.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-icon">🏟️</div><p>Nenhum time cadastrado</p></div>';
+    } else {
+      tl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px">`+
+        state.teams.map(t=>`
+          <div class="team-badge">
+            <div class="team-color" style="background:${t.color}"></div>
+            ${t.name}
+            <button class="team-del" onclick="removeTeam(${t.id})" title="Remover">✕</button>
+          </div>`).join('')+`</div>`;
+    }
+  }
+
+  // Player select pills
+  const ps = document.getElementById('draw-player-select');
+  if(ps) {
+    if(!state.players.length) {
+      ps.innerHTML = '<span style="color:var(--gray-light);font-size:13px">Cadastre jogadores primeiro na aba Jogadores</span>';
+    } else {
+      ps.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px">`+
+        state.players.map(p=>`
+          <button class="player-pill ${selectedDrawPlayers.includes(p.id)?'selected':''}" id="dpill-${p.id}" onclick="toggleDrawPlayer(${p.id})">
+            ${p.photo?`<img src="${p.photo}" style="width:24px;height:24px;border-radius:50%;object-fit:cover">`:`<span class="pav">${initials(p.name)}</span>`}
+            ${p.nick||p.name}
+          </button>`).join('')+`</div>`;
+    }
+  }
+
+  updateDrawInfo();
 }
 
 // ===== INIT =====
