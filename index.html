@@ -469,15 +469,6 @@ async function initFirebase() {
   document.getElementById('loading-txt').textContent = 'Conectando ao Firebase...';
   try {
     let photosLoaded = false;
-    let dataLoaded = false;
-
-    function maybeShowApp() {
-      if(photosLoaded && dataLoaded && !appReady) {
-        appReady = true;
-        document.getElementById('loading-screen').classList.add('hide');
-        renderHome();
-      }
-    }
 
     // Listener em tempo real para a coleção de fotos
     onSnapshot(PHOTOS_COL, (snap) => {
@@ -492,38 +483,44 @@ async function initFirebase() {
       state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
       photosLoaded = true;
       if(appReady) refreshCurrentPage();
-      else maybeShowApp();
-    }, (err) => { console.error('Photos listener error:', err); photosLoaded = true; maybeShowApp(); });
+    }, (err) => { console.error('Photos listener error:', err); });
 
-    // Listener em tempo real para dados principais
+    // Listener em tempo real para dados principais — abre o app assim que chegar
     onSnapshot(DOC_REF, (snap) => {
       if (snap.exists()) {
         const remote = JSON.parse(snap.data().state || '{}');
         state = { players: remote.players || [], championships: remote.championships || [], teams: remote.teams || [] };
-        // Aplica fotos do cache em tempo real
+        // Aplica fotos do cache (se já carregaram)
         state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
       } else {
         state = { players: [], championships: [], teams: [] };
       }
-      dataLoaded = true;
       setSyncing('ok');
-      if(appReady) refreshCurrentPage();
-      else maybeShowApp();
+      if(!appReady) {
+        appReady = true;
+        document.getElementById('loading-screen').classList.add('hide');
+        renderHome();
+      } else {
+        refreshCurrentPage();
+      }
     }, (err) => {
       console.error(err);
       setSyncing('error');
-      dataLoaded = true;
-      maybeShowApp();
+      if(!appReady) {
+        appReady = true;
+        document.getElementById('loading-screen').classList.add('hide');
+        renderHome();
+      }
     });
 
-    // Fallback: mostra o app após 4s mesmo se um listener demorar
+    // Fallback: mostra o app após 5s caso o Firebase não responda
     setTimeout(() => {
       if(!appReady) {
         appReady = true;
         document.getElementById('loading-screen').classList.add('hide');
         renderHome();
       }
-    }, 4000);
+    }, 5000);
 
   } catch(e) {
     console.error(e);
