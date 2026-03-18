@@ -22,7 +22,7 @@
   #loading-screen{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .6s ease;}
   #loading-screen.hide{opacity:0;pointer-events:none;}
   #loading-screen.gone{display:none;}
-  .loading-logo{font-family:'Bebas Neue';font-size:clamp(32px,10vw,56px);letter-spacing:clamp(3px,2vw,8px);color:var(--white);animation:logoIn .6s ease both;white-space:nowrap;text-align:center;}
+  .loading-logo{font-family:'Bebas Neue';font-size:56px;letter-spacing:8px;color:var(--white);animation:logoIn .6s ease both;}
   .loading-logo span{color:var(--orange);}
   .loading-bar{width:260px;height:3px;background:var(--gray-dark);border-radius:2px;overflow:hidden;}
   .loading-bar-fill{height:100%;background:var(--orange);border-radius:2px;animation:loadbar 1.2s ease-in-out infinite;}
@@ -736,30 +736,18 @@ async function saveEditPlayer() {
   const duplicate = state.players.find(x=>x.id!==editingPlayerId && x.name.toLowerCase()===name.toLowerCase());
   if(duplicate) { toast('Já existe um jogador com esse nome!'); return; }
 
-  // Captura tudo ANTES de fechar o modal (closeEditModal zera editPhotoBase64!)
-  const photoToSave = editPhotoBase64;
-  const photoChanged = photoToSave !== (photos[String(p.id)] || null);
-
+  // Salva foto separadamente se mudou
+  const photoChanged = editPhotoBase64 !== (photos[String(p.id)] || null);
   p.name = name;
   p.nick = nick;
-  p.photo = photoToSave;
+  p.photo = editPhotoBase64;
 
-  // Atualiza cache local imediatamente
-  if(photoToSave) {
-    photos[String(p.id)] = photoToSave;
-    try { localStorage.setItem('photo_' + String(p.id), photoToSave); } catch(e){}
-  } else if(photoChanged) {
-    delete photos[String(p.id)];
-    try { localStorage.removeItem('photo_' + String(p.id)); } catch(e){}
-  }
-
-  // Fecha modal
+  // Fecha modal antes de salvar para boa UX
   closeEditModal();
   toast('Salvando...');
 
-  // Salva foto no Firestore se mudou (usa photoToSave, nao editPhotoBase64 que ja foi zerado)
   if(photoChanged) {
-    await savePhotoToFirebase(p.id, photoToSave);
+    await savePhotoToFirebase(p.id, editPhotoBase64);
   }
   save();
   toast('Jogador atualizado! ✅');
@@ -1099,6 +1087,10 @@ function showPlayerStats(pid) {
   const p=state.players.find(x=>x.id===pid);
   let total={pts:0,j:0,v:0,e:0,d:0,gf:0,gc:0,sg:0};
   const champRows=[];
+
+  // Busca maior goleada do jogador em todos os campeonatos
+  let bestMatch = null;
+
   state.championships.forEach(c=>{
     if(!c.players.includes(pid)) return;
     const rows=calcTable(c);
@@ -1107,8 +1099,59 @@ function showPlayerStats(pid) {
     const pos=rows.findIndex(x=>x.pid===pid)+1;
     total.pts+=r.pts;total.j+=r.j;total.v+=r.v;total.e+=r.e;total.d+=r.d;total.gf+=r.gf;total.gc+=r.gc;total.sg+=r.sg;
     champRows.push({c,r,pos,total:rows.length});
+
+    c.matches.filter(m=>m.done).forEach(m=>{
+      const isHome = m.home===pid;
+      const isAway = m.away===pid;
+      if(!isHome && !isAway) return;
+      const myGoals  = isHome ? m.homeGoals : m.awayGoals;
+      const oppGoals = isHome ? m.awayGoals : m.homeGoals;
+      const oppId    = isHome ? m.away : m.home;
+      const diff = myGoals - oppGoals;
+      // Critério: maior gols feitos, desempate por maior diferença de gols
+      if(!bestMatch ||
+         myGoals > bestMatch.myGoals ||
+         (myGoals === bestMatch.myGoals && diff > bestMatch.diff)) {
+        const opp = state.players.find(x=>x.id===oppId);
+        bestMatch = { myGoals, oppGoals, diff, opp, champName: c.name };
+      }
+    });
   });
+
   const wr=total.j>0?Math.round(total.v/total.j*100):0;
+
+  // Monta card de maior goleada
+  let bestMatchHtml = '';
+  if(bestMatch) {
+    const won = bestMatch.diff > 0;
+    const draw = bestMatch.diff === 0;
+    const scoreColor = won ? 'var(--green)' : draw ? 'var(--yellow)' : 'var(--red)';
+    const resultLabel = won ? 'Vitória' : draw ? 'Empate' : 'Derrota';
+    const emoji = won ? '🔥' : draw ? '🤝' : '😬';
+    const oppAvatar = bestMatch.opp ? playerAvatar(bestMatch.opp, 48, 20) : `<div class="avatar" style="width:48px;height:48px;font-size:18px">?</div>`;
+    const oppName = bestMatch.opp ? (bestMatch.opp.nick || bestMatch.opp.name) : '?';
+    bestMatchHtml = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">${emoji} MAIOR GOLEADA</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:20px;padding:16px 0 10px">
+        <div style="text-align:center;flex:1">
+          ${playerAvatar(p, 52, 22)}
+          <div style="font-family:'Bebas Neue';font-size:15px;margin-top:6px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nick||p.name}</div>
+        </div>
+        <div style="text-align:center;flex:0 0 auto">
+          <div style="font-family:'Orbitron';font-size:34px;font-weight:700;color:${scoreColor};letter-spacing:2px">${bestMatch.myGoals} × ${bestMatch.oppGoals}</div>
+          <div style="font-size:11px;color:${scoreColor};margin-top:4px;font-weight:700;letter-spacing:2px;text-transform:uppercase">${resultLabel}</div>
+          <div style="font-size:10px;color:var(--gray-light);margin-top:6px">${bestMatch.champName}</div>
+          ${won && bestMatch.diff > 0 ? `<div style="font-size:11px;color:var(--green);margin-top:4px">saldo <strong>+${bestMatch.diff}</strong></div>` : ''}
+        </div>
+        <div style="text-align:center;flex:1">
+          ${oppAvatar}
+          <div style="font-family:'Bebas Neue';font-size:15px;margin-top:6px;color:var(--gray-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${oppName}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   document.getElementById('stats-content').innerHTML=`
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
@@ -1128,6 +1171,7 @@ function showPlayerStats(pid) {
           ${total.sg>0?'+':''}${total.sg}</div><div class="stat-lbl">Saldo</div></div>
       </div>
     </div>
+    ${bestMatchHtml}
     <div class="card">
       <div class="card-title">HISTÓRICO POR CAMPEONATO</div>
       ${champRows.length?`<div style="overflow-x:auto"><table class="data-table"><thead><tr>
