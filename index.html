@@ -210,6 +210,7 @@
   <div class="loading-logo">FIFA <span>BLESSING</span> CUP</div>
   <div class="loading-bar"><div class="loading-bar-fill"></div></div>
   <div class="loading-txt" id="loading-txt">Conectando ao Firebase...</div>
+  <button onclick="showApp()" style="margin-top:20px;background:var(--orange);color:#000;border:none;padding:10px 24px;font-family:'Rajdhani';font-weight:700;font-size:15px;border-radius:8px;cursor:pointer;display:none" id="btn-entrar">ENTRAR MESMO ASSIM</button>
 </div>
 
 <div id="app-header">
@@ -465,17 +466,25 @@ function save() {
 // ===== LOAD & REALTIME SYNC =====
 let appReady = false;
 
+function showApp() {
+  if(appReady) return;
+  appReady = true;
+  const ls = document.getElementById('loading-screen');
+  if(ls) { ls.classList.add('hide'); ls.style.display = 'none'; }
+  try { renderHome(); } catch(e) { console.error('renderHome error:', e); }
+}
+
 async function initFirebase() {
   document.getElementById('loading-txt').textContent = 'Conectando ao Firebase...';
 
-  function showApp() {
-    if(appReady) return;
-    appReady = true;
-    const ls = document.getElementById('loading-screen');
-    ls.classList.add('hide');
-    ls.style.display = 'none';
-    renderHome();
-  }
+  // Fallbacks de segurança
+  setTimeout(showApp, 2000);
+  setTimeout(showApp, 5000);
+  // Mostrar botão de emergência após 3s
+  setTimeout(() => {
+    const btn = document.getElementById('btn-entrar');
+    if(btn && !appReady) btn.style.display = 'inline-block';
+  }, 3000);
 
   try {
     let photosLoaded = false;
@@ -517,14 +526,13 @@ async function initFirebase() {
       if(!appReady) showApp();
     });
 
-    // Fallback: mostra o app após 3s caso o Firebase não responda
+    // Fallback interno
     setTimeout(showApp, 3000);
 
   } catch(e) {
     console.error(e);
-    document.getElementById('loading-txt').textContent = 'Erro ao conectar. Recarregue a página.';
+    document.getElementById('loading-txt').textContent = 'Erro ao conectar.';
     setSyncing('error');
-    setTimeout(showApp, 2000);
   }
 }
 
