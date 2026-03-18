@@ -414,6 +414,22 @@ let state = { players: [], championships: [] };
 let photos = {};   // { [playerId]: base64string }
 let saveTimeout = null;
 
+// Carrega fotos do localStorage imediatamente (cache local)
+// Isso garante que as fotos aparecem instantaneamente ao recarregar,
+// mesmo antes do Firestore responder
+(function loadPhotosFromLocalStorage() {
+  try {
+    for(let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if(key && key.startsWith('photo_')) {
+        const id = key.replace('photo_', '');
+        const data = localStorage.getItem(key);
+        if(data) photos[id] = data;
+      }
+    }
+  } catch(e) { console.warn('localStorage indisponível:', e); }
+})();
+
 function setSyncing(status) {
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
@@ -445,18 +461,26 @@ async function saveToFirebase() {
 // Salva foto de um jogador em documento separado (~200KB por foto, sem limite prático)
 async function savePhotoToFirebase(playerId, base64) {
   setSyncing('syncing');
+  // Salva no localStorage imediatamente (não espera o Firestore)
+  try {
+    if(base64) {
+      localStorage.setItem('photo_' + String(playerId), base64);
+    } else {
+      localStorage.removeItem('photo_' + String(playerId));
+    }
+  } catch(e) { console.warn('localStorage indisponível:', e); }
+  photos[String(playerId)] = base64 || null;
   try {
     if(base64) {
       await setDoc(doc(db, "photos", String(playerId)), { photo: base64 });
     } else {
       await deleteDoc(doc(db, "photos", String(playerId)));
     }
-    photos[String(playerId)] = base64;
     setSyncing('ok');
   } catch(e) {
     console.error(e);
     setSyncing('error');
-    toast('Erro ao salvar foto! Verifique sua conexão.');
+    toast('Erro ao salvar foto no servidor! Foto salva localmente.');
   }
 }
 
@@ -490,15 +514,19 @@ async function initFirebase() {
   try {
     // Listener fotos — reconstrói o mapa completo a cada update (garante consistência)
     onSnapshot(PHOTOS_COL, (snap) => {
-      // Mantém fotos que foram removidas pelo docChanges, mas atualiza tudo do snap atual
+      // Atualiza remoções
       snap.docChanges().forEach(change => {
         if(change.type === 'removed') {
           delete photos[change.doc.id];
+          try { localStorage.removeItem('photo_' + change.doc.id); } catch(e){}
         }
       });
       // Sempre atualiza/adiciona todas as fotos presentes no snapshot
       snap.docs.forEach(d => {
-        photos[d.id] = d.data().photo;
+        const photoData = d.data().photo;
+        photos[d.id] = photoData;
+        // Salva no localStorage como cache local persistente
+        try { localStorage.setItem('photo_' + d.id, photoData); } catch(e){}
       });
       // Aplica as fotos nos players do state
       state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
