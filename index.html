@@ -467,21 +467,19 @@ function save() {
 let appReady = false;
 
 function showApp() {
-  if(appReady) return;
-  appReady = true;
   const ls = document.getElementById('loading-screen');
-  if(ls) { ls.style.display = 'none'; }
-  try { renderHome(); } catch(e) { console.error('renderHome error:', e); }
+  if(ls) ls.style.display = 'none';
+  if(!appReady) {
+    appReady = true;
+    try { renderHome(); } catch(e) { console.error('renderHome error:', e); }
+  } else {
+    try { refreshCurrentPage(); } catch(e) { console.error('refresh error:', e); }
+  }
 }
 
 async function initFirebase() {
-  // Abre o app imediatamente — Firebase conecta em background
-  setTimeout(showApp, 100);
-
   try {
-    let photosLoaded = false;
-
-    // Listener em tempo real para a coleção de fotos
+    // Listener fotos
     onSnapshot(PHOTOS_COL, (snap) => {
       snap.docChanges().forEach(change => {
         if(change.type === 'added' || change.type === 'modified') {
@@ -490,41 +488,34 @@ async function initFirebase() {
           delete photos[change.doc.id];
         }
       });
-      // Atualiza fotos nos jogadores do state
       state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
-      photosLoaded = true;
       if(appReady) refreshCurrentPage();
-    }, (err) => { console.error('Photos listener error:', err); });
+    }, (err) => { console.error('Photos error:', err); });
 
-    // Listener em tempo real para dados principais — abre o app assim que chegar
+    // Listener dados principais
     onSnapshot(DOC_REF, (snap) => {
       if (snap.exists()) {
         const remote = JSON.parse(snap.data().state || '{}');
         state = { players: remote.players || [], championships: remote.championships || [], teams: remote.teams || [] };
-        // Aplica fotos do cache (se já carregaram)
         state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
       } else {
         state = { players: [], championships: [], teams: [] };
       }
       setSyncing('ok');
-      if(!appReady) {
-        showApp();
-      } else {
-        refreshCurrentPage();
-      }
+      showApp();        // abre ou re-renderiza
     }, (err) => {
       console.error(err);
       setSyncing('error');
-      if(!appReady) showApp();
+      showApp();
     });
 
-    // Fallback interno
-    setTimeout(showApp, 3000);
+    // Fallback: abre após 4s mesmo sem Firebase
+    setTimeout(showApp, 4000);
 
   } catch(e) {
     console.error(e);
-    document.getElementById('loading-txt').textContent = 'Erro ao conectar.';
     setSyncing('error');
+    showApp();
   }
 }
 
