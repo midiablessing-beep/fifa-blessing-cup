@@ -488,15 +488,19 @@ setTimeout(showApp, 3000);
 
 async function initFirebase() {
   try {
-    // Listener fotos
+    // Listener fotos — reconstrói o mapa completo a cada update (garante consistência)
     onSnapshot(PHOTOS_COL, (snap) => {
+      // Mantém fotos que foram removidas pelo docChanges, mas atualiza tudo do snap atual
       snap.docChanges().forEach(change => {
-        if(change.type === 'added' || change.type === 'modified') {
-          photos[change.doc.id] = change.doc.data().photo;
-        } else if(change.type === 'removed') {
+        if(change.type === 'removed') {
           delete photos[change.doc.id];
         }
       });
+      // Sempre atualiza/adiciona todas as fotos presentes no snapshot
+      snap.docs.forEach(d => {
+        photos[d.id] = d.data().photo;
+      });
+      // Aplica as fotos nos players do state
       state.players.forEach(p => { p.photo = photos[String(p.id)] || null; });
       if(appReady) refreshCurrentPage();
     }, (err) => { console.error('Photos error:', err); });
